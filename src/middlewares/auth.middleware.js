@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { User } from '../models/user.model.js'
+import { supabase } from '../db/client.js'
 
 export const authMiddleware = async (req, res, next) => {
   try {
@@ -39,18 +40,20 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     // 4️⃣ Fetch user
-    const user = await User.findById(decoded.id)
-      .select('-password')
-      .populate('store')
+    const { data, error } = await supabase()
+      .from('users')
+      .select('*')
+      .eq('id', decoded.id)
+      .single()
 
-    if (!user || !user.isActive) {
+    if (!data || !data.is_active) {
       return res
         .status(401)
         .json({ success: false, message: 'User not found or inactive' })
     }
 
     // 5️⃣ Attach user to request
-    req.user = user
+    req.user = data
 
     next()
   } catch (err) {

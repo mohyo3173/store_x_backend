@@ -1,28 +1,48 @@
 import * as yup from 'yup'
-import { email, password, name, role } from './common.js'
+import {
+  emailField,
+  passwordField,
+  nameField,
+  roleField,
+  storeNameField,
+  isActiveField,
+  idField,
+} from './common.js'
 
-const signup = yup.object({
-  name,
-  email,
-  password,
-  role,
+export const signup = yup.object({
+  name: nameField,
+  email: emailField,
+  password: passwordField,
+  role: roleField,
+  is_active: isActiveField,
 
-  is_active: yup.boolean().default(true),
+  storeName: storeNameField.when('role', {
+    is: 'store-owner',
+    then: (schema) =>
+      schema.required('Store name is required for store owners'),
+    otherwise: (schema) => schema.optional().nullable(),
+  }),
+
+  storeTypeId: idField.when('role', {
+    is: 'store-owner',
+    then: (schema) =>
+      schema.required('Store type is required for store owners'),
+    otherwise: (schema) => schema.optional().nullable(),
+  }),
+
+  storeAddress: yup.string().trim().max(255).nullable().optional(),
+  storePhone: yup.string().trim().max(20).nullable().optional(),
 })
 const signin = yup.object({
-  name,
-  email,
-  password,
-  role,
-
-  is_active: yup.boolean().default(true),
+  email: emailField,
+  password: passwordField,
 })
 
 const update = yup.object({
-  name: name.optional(),
-  email: email.optional(),
-  password: password.optional(),
-  role: role.optional(),
+  name: nameField.optional(),
+  email: emailField.optional(),
+  password: passwordField.optional(),
+  role: roleField.optional(),
   is_active: yup.boolean().optional(),
 })
 

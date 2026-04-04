@@ -48,8 +48,6 @@ const signup = async (req, res) => {
       storePhone,
     } = req.body
 
-
-
     // Check if user exists
     const { data: existingUser, error: findError } = await supabase()
       .from('users')
@@ -67,7 +65,14 @@ const signup = async (req, res) => {
     const { data: newUser, error: insertError } = await supabase()
       .from('users')
       .insert([
-        { name, email, password, role, is_active: true, created_at: new Date() },
+        {
+          name,
+          email,
+          password,
+          role,
+          is_active: true,
+          created_at: new Date(),
+        },
       ])
       .select()
       .single()
@@ -159,15 +164,7 @@ const login = async (req, res) => {
 // GET /api/auth/me
 const getMe = async (req, res) => {
   try {
-    const userId = req.user.id // from middleware JWT decode
-
-    const { data: user, error } = await supabase()
-      .from('users')
-      .select('*, stores(*)')
-      .eq('id', userId)
-      .single()
-
-    if (error) throw error
+    const user = req.user
 
     res.json({ success: true, user })
   } catch (err) {
