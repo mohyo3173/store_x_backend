@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 import { User } from '../models/user.model.js'
 import { StoreType } from '../models/store-type.model.js'
-
+import { supabase } from '../db/client.js'
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d',
@@ -48,51 +48,72 @@ const signup = async (req, res) => {
       storePhone,
     } = req.body
 
-    if (!['user', 'store-owner'].includes(role)) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Role must be user or store_owner' })
-    }
 
-    const existing = await User.findOne({ email })
-    if (existing)
-      return res
-        .status(400)
-        .json({ success: false, message: 'Email already registered' })
+
+    // Check if user exists
+    const { data: existingUser, error: findError } = await supabase()
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (existingUser)
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered',
+      })
+
+    // Insert new user
+    const { data: newUser, error: insertError } = await supabase()
+      .from('users')
+      .insert([
+        { name, email, password, role, is_active: true, created_at: new Date() },
+      ])
+      .select()
+      .single()
+
+    if (insertError) throw insertError
 
     let storeId = null
 
-    if (role === 'store_owner') {
-      if (!storeTypeId || !storeName) {
+    if (role === 'store-owner') {
+      if (!storeTypeId || !storeName)
         return res.status(400).json({
           success: false,
-          message: 'Store type and store name are required for store owners',
+          message: 'Store type and store name required for store owners',
         })
-      }
-      const storeType = await StoreType.findById(storeTypeId)
-      if (!storeType || !storeType.isActive) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'Invalid or inactive store type' })
-      }
 
-      // Create user first, then store
-      const user = await User.create({ name, email, password, role })
-      const store = await Store.create({
-        name: storeName,
-        storeType: storeTypeId,
-        owner: user._id,
-        address: storeAddress || '',
-        phone: storePhone || '',
-        email,
-      })
-      user.store = store._id
-      await user.save()
-      return sendToken(user, 201, res)
+      // Create store
+      const { data: newStore, error: storeError } = await supabase()
+        .from('stores')
+        .insert([
+          {
+            name: storeName,
+            store_category_id: storeTypeId,
+            owner_id: newUser.id,
+            address: storeAddress || '',
+            phone: storePhone || '',
+            email,
+            created_at: new Date(),
+          },
+        ])
+        .select()
+        .single()
+
+      if (storeError) throw storeError
+      storeId = newStore.id
     }
 
-    const user = await User.create({ name, email, password, role: 'user' })
-    return sendToken(user, 201, res)
+    // Generate token
+    const token = jwt.sign({ id: newUser.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
+    })
+
+    return res.status(201).json({
+      success: true,
+      token,
+      user: { ...newUser, store: storeId || null },
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: err.message })
@@ -106,20 +127,29 @@ const login = async (req, res) => {
     if (!email || !password)
       return res
         .status(400)
-        .json({ success: false, message: 'Email and password are required' })
-console.log('Login attempt:', email,password)
-    const user = await User.findOne({ email }).populate('store')
-    if (!user || !(await user.matchPassword(password)))
+        .json({ success: false, message: 'Email and password required' })
+
+    const { data: user, error } = await supabase()
+      .from('users')
+      .select('*, stores(*)') // join store table
+      .eq('email', email)
+      .single()
+
+    if (!user || user.password !== password)
       return res
         .status(401)
         .json({ success: false, message: 'Invalid credentials' })
 
-    if (!user.isActive)
+    if (!user.is_active)
       return res
         .status(403)
         .json({ success: false, message: 'Account deactivated' })
 
-    return sendToken(user, 200, res)
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
+    })
+
+    return res.status(200).json({ success: true, token, user })
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: err.message })
@@ -128,9 +158,21 @@ console.log('Login attempt:', email,password)
 
 // GET /api/auth/me
 const getMe = async (req, res) => {
-  const user = await User.findById(req.user._id)
-    .select('-password')
-    .populate('store')
-  res.json({ success: true, user })
+  try {
+    const userId = req.user.id // from middleware JWT decode
+
+    const { data: user, error } = await supabase()
+      .from('users')
+      .select('*, stores(*)')
+      .eq('id', userId)
+      .single()
+
+    if (error) throw error
+
+    res.json({ success: true, user })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: err.message })
+  }
 }
 export default { getMe, login, signup }
