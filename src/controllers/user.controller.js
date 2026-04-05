@@ -62,6 +62,7 @@ const signup = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Email already registered',
+        
         errors: { email: 'Email is already in use' },
       })
     }
