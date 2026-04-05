@@ -34,7 +34,6 @@ const sendToken = (user, statusCode, res) => {
     .json({ success: true, token, user })
 }
 
-// POST /api/auth/signup
 const signup = async (req, res) => {
   try {
     const {
@@ -48,27 +47,33 @@ const signup = async (req, res) => {
       storePhone,
     } = req.body
 
-    // Check if user exists
-    const { data: existingUser, error: findError } = await supabase()
+    const fieldErrors = {}
+
+    // 1️⃣ Validate required fields
+
+    // 2️⃣ Check if user exists
+    const { data: existingUser } = await supabase()
       .from('users')
-      .select('*')
+      .select('id')
       .eq('email', email)
       .single()
 
-    if (existingUser)
+    if (existingUser) {
       return res.status(400).json({
         success: false,
         message: 'Email already registered',
+        errors: { email: 'Email is already in use' },
       })
+    }
 
-    // Insert new user
+    // 3️⃣ Insert new user
     const { data: newUser, error: insertError } = await supabase()
       .from('users')
       .insert([
         {
           name,
           email,
-          password,
+          password, // TODO: hash password
           role,
           is_active: true,
           created_at: new Date(),
@@ -81,14 +86,8 @@ const signup = async (req, res) => {
 
     let storeId = null
 
+    // 4️⃣ Insert store if store-owner
     if (role === 'store-owner') {
-      if (!storeTypeId || !storeName)
-        return res.status(400).json({
-          success: false,
-          message: 'Store type and store name required for store owners',
-        })
-
-      // Create store
       const { data: newStore, error: storeError } = await supabase()
         .from('stores')
         .insert([
@@ -96,8 +95,8 @@ const signup = async (req, res) => {
             name: storeName,
             store_category_id: storeTypeId,
             owner_id: newUser.id,
-            address: storeAddress || '',
-            phone: storePhone || '',
+            address: storeAddress,
+            phone: storePhone,
             email,
             created_at: new Date(),
           },
@@ -109,7 +108,7 @@ const signup = async (req, res) => {
       storeId = newStore.id
     }
 
-    // Generate token
+    // 5️⃣ Generate token
     const token = jwt.sign({ id: newUser.id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRE || '7d',
     })
@@ -121,7 +120,11 @@ const signup = async (req, res) => {
     })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ success: false, message: err.message })
+    return res.status(500).json({
+      success: false,
+      message: 'Server error',
+      errors: { server: err.message },
+    })
   }
 }
 

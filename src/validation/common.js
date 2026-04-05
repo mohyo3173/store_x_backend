@@ -45,3 +45,6 @@ export const roleField = yup
   .required('Role is required')
 export const storeNameField = yup.string().trim().min(2).max(100)
 export const isActiveField = yup.boolean().default(true)
+export const iconField = yup.string().trim().max(100).nullable()
+export const storeAddress = yup.string().trim().max(255).nullable()
+export const storePhoneNumber = yup.string().trim().max(20).nullable()

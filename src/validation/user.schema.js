@@ -7,7 +7,9 @@ import {
   storeNameField,
   isActiveField,
   idField,
-} from './common.js'
+  storeAddress,
+  storePhoneNumber,
+} from '../../../backend/src/validation/common.js'
 
 export const signup = yup.object({
   name: nameField,
@@ -30,8 +32,8 @@ export const signup = yup.object({
     otherwise: (schema) => schema.optional().nullable(),
   }),
 
-  storeAddress: yup.string().trim().max(255).nullable().optional(),
-  storePhone: yup.string().trim().max(20).nullable().optional(),
+  storeAddress: storeAddress.optional(),
+  storePhone: storePhoneNumber.optional(),
 })
 const signin = yup.object({
   email: emailField,
