@@ -9,7 +9,7 @@ import {
   idField,
   storeAddress,
   storePhoneNumber,
-} from '../../../backend/src/validation/common.js'
+} from './common.js'
 
 export const signup = yup.object({
   name: nameField,
